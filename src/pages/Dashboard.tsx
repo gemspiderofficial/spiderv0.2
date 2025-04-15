@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { LoadingScreen } from '../components/LoadingScreen';
@@ -7,8 +7,8 @@ import { Dialog } from '@headlessui/react';
 import { experienceForNextLevel, getFeedersNeeded, getFeedingCost } from '../utils/core';
 import { useAuthContext } from '../contexts/AuthContext';
 import { InstructionPanel } from '../components/InstructionPanel';
+import { ArrowDownOnSquareIcon } from '@heroicons/react/24/outline';
 
-// Lazy load modals with error boundaries
 const RankingModal = lazy(() => 
   import('../components/modals/RankingModal')
     .then(mod => ({ default: mod.RankingModal }))
@@ -27,13 +27,9 @@ const BreakthroughModal = lazy(() => import('../components/modals/BreakthroughMo
 const SpiderModal = lazy(() => import('../components/modals/SpiderModal').then(mod => ({ default: mod.SpiderModal })));
 const DepositModal = lazy(() => import('../components/modals/DepositModal').then(mod => ({ default: mod.DepositModal })));
 
-import { Menu } from '@headlessui/react';
-import { ChevronUpIcon, ArrowDownOnSquareIcon } from '@heroicons/react/24/outline';
-
 function Dashboard() {
   const { player, feedSpiderAction, hydrateSpiderAction, updateTokens, updateBalance, updateSpider } = useGameStore();
-  const { spiderTokenBalance, isBalanceLoading } = useAuthContext();
-  // Safely access the first spider, or undefined if there are none
+  const { isBalanceLoading } = useAuthContext();
   const activeSpider = player.spiders && player.spiders.length > 0 ? player.spiders[0] : undefined;
 
   const [isRankingOpen, setIsRankingOpen] = useState(false);
@@ -54,7 +50,6 @@ function Dashboard() {
     currency: 'SPIDER' | 'feeders';
   } | null>(null);
 
-  // Web points for the spider to move through
   const webPoints = [
     { top: '25%', left: '25%' },
     { top: '25%', right: '25%' },
@@ -83,7 +78,6 @@ function Dashboard() {
     { top: '40%', right: '20%' }
   ];
 
-  // Move spider to random position every 8 seconds
   useEffect(() => {
     const moveSpider = () => {
       const randomPoint = webPoints[Math.floor(Math.random() * webPoints.length)];
@@ -94,15 +88,13 @@ function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Update tokens and spider conditions every minute
   useEffect(() => {
     const interval = setInterval(() => {
-      updateTokens(); // This now also updates spider conditions
+      updateTokens();
     }, 60000);
     return () => clearInterval(interval);
   }, [updateTokens]);
 
-  // Calculate level progress
   const nextLevelXP = activeSpider ? experienceForNextLevel(activeSpider.level) : 0;
   const currentLevelXP = activeSpider ? experienceForNextLevel(activeSpider.level - 1) : 0;
   const progressToNextLevel = activeSpider
@@ -172,10 +164,6 @@ function Dashboard() {
     setConfirmationModal(null);
   };
 
-  // Update the side button classes
-  const sideButtonClasses = "relative group w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 hover:-translate-x-1 active:scale-95";
-
-  // Render the main dashboard content
   const renderDashboardContent = () => {
   if (!activeSpider) {
     return (
@@ -209,14 +197,12 @@ function Dashboard() {
 
   return (
       <>
-        {/* If player has spiders but balance is low, show instruction panel */}
         {player.balance.SPIDER < 200 && (
           <div className="absolute top-20 left-0 right-0 px-4 sm:px-6 z-30">
             <InstructionPanel onOpenDeposit={() => setIsDepositOpen(true)} />
           </div>
         )}
         
-      {/* Balance Display */}
       <div className="fixed top-4 left-0 right-0 px-4 sm:px-6 z-40">
         <div className="glass-panel p-2 sm:p-3 max-w-md mx-auto flex justify-center gap-4 sm:gap-8">
           <div className="flex items-center gap-2">
@@ -249,7 +235,6 @@ function Dashboard() {
           </div>
         </div>
           
-          {/* Low Balance Notification */}
           {player.balance.SPIDER < 200 && (
             <div className="max-w-md mx-auto mt-2 p-2 bg-yellow-500/80 rounded-lg text-white text-xs text-center">
               <p>Your $SPIDER balance is low! <button onClick={() => setIsDepositOpen(true)} className="underline font-bold">Deposit tokens</button> to summon spiders.</p>
@@ -377,7 +362,7 @@ function Dashboard() {
               className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl flex items-center justify-center hover:scale-110 transition-transform"
             >
               <img 
-                src={getSpiderImage(activeSpider.genetics)}
+                src={activeSpider ? getSpiderImage(activeSpider.genetics) : "src/assets/Home.png"}
                 alt="Spider" 
                 className="w-full h-full object-cover rounded-2xl"
               />
@@ -398,10 +383,8 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Status Bars Container */}
       <div className="fixed bottom-20 sm:bottom-24 left-0 right-0 px-4 sm:px-6 z-40">
         <div className="glass-panel p-2 sm:p-3 max-w-md mx-auto">
-          {/* Health Bar */}
           <div className="mb-2">
             <div className="flex justify-between items-center mb-1">
               <div className="flex items-center gap-1">
@@ -430,7 +413,6 @@ function Dashboard() {
             </div>
           </div>
           
-          {/* Hunger Bar */}
           <div className="mb-2">
             <div className="flex justify-between items-center mb-1">
               <div className="flex items-center gap-1">
@@ -459,7 +441,6 @@ function Dashboard() {
             </div>
           </div>
           
-          {/* Hydration Bar */}
           <div>
             <div className="flex justify-between items-center mb-1">
               <div className="flex items-center gap-1">
@@ -490,7 +471,6 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Confirmation Modal */}
       <Dialog 
         open={confirmationModal?.isOpen ?? false} 
         onClose={() => setConfirmationModal(null)}
@@ -532,10 +512,8 @@ function Dashboard() {
 
   return (
     <div className="game-container">
-      {/* Render the main dashboard content */}
       {renderDashboardContent()}
       
-      {/* Modals with Error Boundaries - always render these regardless of activeSpider */}
       <ErrorBoundary>
         <Suspense fallback={<LoadingScreen fullscreen={false} />}>
           {isRankingOpen && <RankingModal isOpen={isRankingOpen} onClose={() => setIsRankingOpen(false)} />}

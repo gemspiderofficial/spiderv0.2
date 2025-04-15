@@ -8,6 +8,8 @@ import {
   SparklesIcon
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
+import { useGameStore } from '../store/useGameStore';
+import { getSpiderImage } from '../utils/spiderImage';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -15,6 +17,8 @@ interface LayoutProps {
 
 function Layout({ children }: LayoutProps) {
   const location = useLocation();
+  const { player } = useGameStore();
+  const activeSpider = player.spiders && player.spiders.length > 0 ? player.spiders[0] : undefined;
 
   const navItems = [
     {
@@ -83,7 +87,7 @@ function Layout({ children }: LayoutProps) {
                   location.pathname === item.to ? "scale-110" : ""
                 )}>
                   <img 
-                    src="https://raw.githubusercontent.com/stackblitz/stackblitz-web/main/src/assets/images/logo.svg" 
+                    src={activeSpider ? getSpiderImage(activeSpider.genetics) : "src/assets/Home.png"}
                     alt="Spider"
                     className="w-full h-full object-contain"
                   />

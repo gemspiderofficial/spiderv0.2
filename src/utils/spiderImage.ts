@@ -18,7 +18,7 @@ export function getSpiderImage(genes: string): string {
     return geneImageMap[upperGenes];
   }
 
-  // Fallback to a default image if the gene combination is not found
-  console.warn(`No image found for genes: ${genes}, using default image`);
-  return 'src/assets/default.png';
-} 
+  // Fallback to Home.png if the gene combination is not found
+  console.warn(`No image found for genes: ${genes}, using Home.png as fallback`);
+  return 'src/assets/Home.png';
+}

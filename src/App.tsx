@@ -27,7 +27,7 @@ const queryClient = new QueryClient({
 });
 
 // TON Connect manifest URL
-const manifestUrl = 'https://markmon08.github.io/gemspider/tonconnect-manifest.json';
+const manifestUrl = 'https://gemspiderofficial.github.io/gemspider/tonconnect-manifest.json';
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);

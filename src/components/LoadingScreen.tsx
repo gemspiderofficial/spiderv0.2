@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { getSpiderImage } from '../utils/spiderImage';
 import { useGameStore } from '../store/useGameStore';
 
@@ -57,7 +57,7 @@ export function LoadingScreen({ fullscreen = true, onLoadingComplete }: LoadingS
           <div className="absolute inset-0 border-4 border-t-teal-500 rounded-full animate-spin"></div>
           <div className="absolute inset-0 flex items-center justify-center">
             <img 
-              src={activeSpider ? getSpiderImage(activeSpider.genetics) : "src/assets/default-spider.png"}
+              src={activeSpider ? getSpiderImage(activeSpider.genetics) : "src/assets/Home.png"}
               alt="Spider Logo"
               className="w-12 h-12 animate-[spider-dance_2s_ease-in-out_infinite]"
             />
