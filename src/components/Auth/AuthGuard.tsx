@@ -6,26 +6,29 @@ import { LoadingScreen } from '../LoadingScreen';
 
 interface AuthGuardProps {
   children: React.ReactNode;
-  requireAuth?: boolean; // If true, user must be authenticated to access
+  requireAuth?: boolean;
 }
 
 const AuthGuard: React.FC<AuthGuardProps> = ({ children, requireAuth = true }) => {
   const { isAuthenticated, isLoading, playerProfile, isPlayerProfileLoading } = useAuthContext();
   const location = useLocation();
 
-  // Show loading screen while checking authentication or loading profile
-  if (isLoading || isPlayerProfileLoading) {
+  // Only show loading screen during initial authentication check
+  if (isLoading) {
     return <LoadingScreen />;
   }
 
   // If authentication is required and user is not authenticated, show login
   if (requireAuth && !isAuthenticated) {
+    // Store the attempted URL for redirection after login
+    const currentPath = location.pathname + location.search;
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
         <div className="w-full max-w-md">
           <Login 
             onSuccess={() => {
-              // No need to navigate as auth state change will re-render this component
+              // The auth state change will trigger a re-render
+              console.log('Login successful, continuing to:', currentPath);
             }} 
           />
         </div>
@@ -33,8 +36,20 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children, requireAuth = true }) =
     );
   }
 
-  // If user is authenticated and has all required data, show the protected content
+  // Show loading screen while fetching player profile
+  if (requireAuth && isAuthenticated && isPlayerProfileLoading) {
+    return <LoadingScreen />;
+  }
+
+  // If we require auth and have no player profile after loading, something went wrong
+  if (requireAuth && isAuthenticated && !isPlayerProfileLoading && !playerProfile) {
+    console.error('No player profile found after authentication');
+    // Redirect to login and force a fresh authentication
+    return <Navigate to="/login" replace />;
+  }
+
+  // User is authenticated (or auth not required) and we have the profile if needed
   return <>{children}</>;
 };
 
-export default AuthGuard; 
+export default AuthGuard;

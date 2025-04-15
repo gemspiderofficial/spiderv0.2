@@ -75,7 +75,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Load or create player profile when user authenticates
   useEffect(() => {
     const loadProfile = async () => {
-      if (user) {
+      // Only proceed if we have a user and we're not already loading
+      if (user && !isPlayerProfileLoading) {
         setIsPlayerProfileLoading(true);
         setPlayerProfileError(null);
         
@@ -124,14 +125,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } finally {
           setIsPlayerProfileLoading(false);
         }
-      } else {
+      } else if (!user) {
         // Reset player profile when user logs out
         setPlayerProfile(null);
+        setIsPlayerProfileLoading(false);
+        setPlayerProfileError(null);
       }
     };
     
     loadProfile();
-  }, [user, tonConnectUI.account, tonConnectUI.connected, addSpider, updateBalance]);
+  }, [user, tonConnectUI.account, tonConnectUI.connected]);
 
   // Fetch token balance when wallet is connected
   useEffect(() => {
@@ -249,4 +252,4 @@ export const useAuthContext = (): AuthContextProps => {
   }
   
   return context;
-}; 
+};
