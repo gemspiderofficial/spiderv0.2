@@ -11,29 +11,33 @@ export function LoadingScreen({ fullscreen = true, onLoadingComplete }: LoadingS
   const [progress, setProgress] = useState(0);
   const [progressComplete, setProgressComplete] = useState(false);
   const { player } = useGameStore();
-  const activeSpider = player.spiders && player.spiders.length > 0 ? player.spiders[0] : undefined;
+  const activeSpider = player?.spiders?.[0];
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    let intervalId: NodeJS.Timeout;
+    
+    // Start progress animation
+    intervalId = setInterval(() => {
       setProgress(prev => {
         if (prev >= 100) {
-          clearInterval(interval);
+          clearInterval(intervalId);
           setProgressComplete(true);
           return 100;
         }
-        return Math.min(prev + 1, 100);
+        // Slow down progress as it gets closer to 100
+        const increment = Math.max(1, (100 - prev) / 10);
+        return Math.min(prev + increment, 100);
       });
     }, 50);
 
-    return () => clearInterval(interval);
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
     if (progressComplete && onLoadingComplete) {
-      // Add a small delay before completing to ensure smooth transition
-      const timeout = setTimeout(() => {
-        onLoadingComplete();
-      }, 500);
+      const timeout = setTimeout(onLoadingComplete, 500);
       return () => clearTimeout(timeout);
     }
   }, [progressComplete, onLoadingComplete]);
@@ -58,15 +62,15 @@ export function LoadingScreen({ fullscreen = true, onLoadingComplete }: LoadingS
           <div className="absolute inset-0 flex items-center justify-center">
             <img 
               src={activeSpider ? getSpiderImage(activeSpider.genetics) : "src/assets/Home.png"}
-              alt="Spider Logo"
-              className="w-12 h-12 animate-[spider-dance_2s_ease-in-out_infinite]"
+              alt="Loading"
+              className="w-12 h-12 animate-pulse"
             />
           </div>
         </div>
       </div>
       
       <div className="w-full px-8 pb-12">
-        <div className="h-4 bg-gray-800 rounded-full overflow-hidden mb-3 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)]">
+        <div className="h-4 bg-gray-800 rounded-full overflow-hidden mb-3">
           <div 
             className="h-full bg-gradient-to-r from-teal-600 via-teal-500 to-teal-400 rounded-full transition-all duration-300 ease-out relative"
             style={{ width: `${progress}%` }}
@@ -77,10 +81,10 @@ export function LoadingScreen({ fullscreen = true, onLoadingComplete }: LoadingS
         
         <div className="flex justify-between items-center px-1">
           <div className="text-teal-500 text-sm font-medium">
-            {progress === 100 ? 'Preparing game...' : 'Loading...'}
+            {progress === 100 ? 'Almost ready...' : 'Loading game...'}
           </div>
           <div className="text-teal-500 text-sm font-bold">
-            {progress}%
+            {Math.round(progress)}%
           </div>
         </div>
       </div>

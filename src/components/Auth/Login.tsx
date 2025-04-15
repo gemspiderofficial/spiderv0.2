@@ -21,6 +21,7 @@ const Login: React.FC<LoginProps> = ({ onSuccess }) => {
   
   const { 
     isLoading,
+    isAuthenticated,
     loginWithEmail,
     loginWithGoogle,
     loginAnonymously,
@@ -28,6 +29,14 @@ const Login: React.FC<LoginProps> = ({ onSuccess }) => {
     user
   } = useAuthContext();
   
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      const from = location.state?.from?.pathname || '/';
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, isLoading, navigate, location]);
+
   // Check for referral code in URL
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -80,12 +89,14 @@ const Login: React.FC<LoginProps> = ({ onSuccess }) => {
         await loginWithEmail(email, password);
       }
       
+      // No need to navigate here, the useEffect will handle it
       if (onSuccess) {
         onSuccess();
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Authentication failed';
       setErrorMessage(message);
+      console.error('Auth error:', error);
     }
   };
   
@@ -93,13 +104,14 @@ const Login: React.FC<LoginProps> = ({ onSuccess }) => {
     try {
       setErrorMessage('');
       await loginWithGoogle();
-      
+      // No need to navigate here, the useEffect will handle it
       if (onSuccess) {
         onSuccess();
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Google authentication failed';
       setErrorMessage(message);
+      console.error('Google auth error:', error);
     }
   };
   
@@ -107,13 +119,14 @@ const Login: React.FC<LoginProps> = ({ onSuccess }) => {
     try {
       setErrorMessage('');
       await loginAnonymously();
-      
+      // No need to navigate here, the useEffect will handle it
       if (onSuccess) {
         onSuccess();
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Anonymous authentication failed';
       setErrorMessage(message);
+      console.error('Anonymous auth error:', error);
     }
   };
   
@@ -295,4 +308,4 @@ const Login: React.FC<LoginProps> = ({ onSuccess }) => {
   );
 };
 
-export default Login; 
+export default Login;

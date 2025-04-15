@@ -3,7 +3,8 @@ import { Dialog } from '@headlessui/react';
 import { useAuthContext } from '../../contexts/AuthContext';
 import { useGameStore } from '../../store/useGameStore';
 import { XMarkIcon, ArrowDownIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
-import { depositSpiderTokens, getUserWalletAddress, fetchSpiderTokenBalance } from '../../services/tonService';
+import { depositSpiderTokens, getUserWalletAddress, fetchSpiderTokenBalance, verifyDepositTransaction } from '../../services/tonService';
+import { useTonConnectUI } from '@tonconnect/ui-react';
 
 interface DepositModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface DepositModalProps {
 export function DepositModal({ isOpen, onClose }: DepositModalProps) {
   const { user, playerProfile, refreshBalance } = useAuthContext();
   const { player, updateBalance } = useGameStore();
+  const [tonConnectUI] = useTonConnectUI();
   
   const [amount, setAmount] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -21,12 +23,19 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [isLoadingWalletInfo, setIsLoadingWalletInfo] = useState(false);
+  const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [pollInterval, setPollInterval] = useState<NodeJS.Timeout | null>(null);
 
   // Load wallet info when modal opens
   useEffect(() => {
     if (isOpen && user) {
       loadWalletInfo();
     }
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
   }, [isOpen, user]);
 
   // Load wallet information
@@ -41,7 +50,7 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
       const address = await getUserWalletAddress(user.uid);
       setWalletAddress(address);
       
-      // Get wallet balance
+      // Get wallet balance if address exists
       if (address) {
         const balance = await fetchSpiderTokenBalance(address);
         setWalletBalance(balance);
@@ -54,23 +63,43 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
     }
   };
 
+  // Start polling for transaction confirmation
+  const startPolling = (txId: string) => {
+    if (pollInterval) clearInterval(pollInterval);
+    
+    const interval = setInterval(async () => {
+      try {
+        const isConfirmed = await verifyDepositTransaction(txId, tonConnectUI.account?.address || '');
+        if (isConfirmed) {
+          clearInterval(interval);
+          setSuccessMessage('Deposit confirmed! Your game balance has been updated.');
+          setIsProcessing(false);
+          refreshBalance();
+          setTransactionId(null);
+        }
+      } catch (error) {
+        console.error('Error checking transaction:', error);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    setPollInterval(interval);
+  };
+
   // Handle deposit
   const handleDeposit = async () => {
-    if (!user || !walletAddress) {
-      setErrorMessage('You need to connect a wallet first.');
+    if (!user || !walletAddress || !tonConnectUI.account) {
+      setErrorMessage('Please connect your wallet first.');
       return;
     }
     
-    // Validate amount
     const depositAmount = parseFloat(amount);
     if (isNaN(depositAmount) || depositAmount <= 0) {
       setErrorMessage('Please enter a valid amount.');
       return;
     }
     
-    // Check if wallet has enough balance
     if (walletBalance !== null && depositAmount > walletBalance) {
-      setErrorMessage('Not enough $SPIDER tokens in your wallet.');
+      setErrorMessage('Not enough tokens in your wallet.');
       return;
     }
     
@@ -79,26 +108,36 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
     setSuccessMessage('');
     
     try {
-      // Process deposit
-      const transactionId = await depositSpiderTokens(user.uid, walletAddress, depositAmount);
+      // Create pending transaction
+      const txId = await depositSpiderTokens(user.uid, walletAddress, depositAmount);
       
-      if (transactionId) {
-        // Update UI balance immediately
-        const newBalance = (player.balance.SPIDER || 0) + depositAmount;
-        updateBalance({ SPIDER: newBalance });
-        
-        setSuccessMessage(`Successfully deposited ${depositAmount} $SPIDER tokens!`);
-        setAmount('');
-        
-        // Refresh wallet balance
-        loadWalletInfo();
-      } else {
-        setErrorMessage('Deposit failed. Please try again.');
+      if (!txId) {
+        throw new Error('Failed to create transaction');
       }
+
+      setTransactionId(txId);
+      setSuccessMessage('Transaction initiated. Please confirm in your wallet...');
+
+      // Request user to send tokens
+      const result = await tonConnectUI.sendTransaction({
+        messages: [{
+          address: process.env.VITE_GAME_WALLET_ADDRESS || '',
+          amount: depositAmount.toString(),
+          payload: txId // Include transaction ID in payload
+        }],
+        validUntil: Date.now() + 5 * 60 * 1000 // 5 minutes
+      });
+
+      if (result.success) {
+        startPolling(txId);
+        setSuccessMessage('Transaction sent! Waiting for confirmation...');
+      } else {
+        throw new Error('Transaction rejected');
+      }
+      
     } catch (error) {
       console.error('Error processing deposit:', error);
-      setErrorMessage('An error occurred while processing your deposit. Please try again.');
-    } finally {
+      setErrorMessage('Transaction failed. Please try again.');
       setIsProcessing(false);
     }
   };
@@ -106,10 +145,8 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
   // Handle button click
   const handleButtonClick = () => {
     if (!walletAddress) {
-      // Direct user to connect a wallet
       onClose();
-      // In a real implementation, you would navigate to a wallet connection page
-      alert('Please connect a TON wallet in your profile settings first.');
+      // Navigate to profile page or open wallet connection dialog
     } else {
       handleDeposit();
     }
@@ -242,4 +279,4 @@ export function DepositModal({ isOpen, onClose }: DepositModalProps) {
       </div>
     </Dialog>
   );
-} 
+}

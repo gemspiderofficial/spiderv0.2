@@ -1,30 +1,49 @@
 import { db } from '../config/firebase';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { updatePlayerBalance } from './playerService';
+import axios from 'axios';
 
-const SPIDER_TOKEN_ADDRESS = 'EQD...'; // Replace with actual SPIDER token contract address
+// Constants
+const SPIDER_TOKEN_ADDRESS = import.meta.env.VITE_SPIDER_TOKEN_ADDRESS;
+const TON_API_ENDPOINT = import.meta.env.VITE_TON_API_ENDPOINT;
+const GAME_WALLET_ADDRESS = import.meta.env.VITE_GAME_WALLET_ADDRESS;
 
-// Add a local variable to track mock balance for development
-let mockBalance = 5000;
+// Validate required environment variables
+if (!SPIDER_TOKEN_ADDRESS || !TON_API_ENDPOINT || !GAME_WALLET_ADDRESS) {
+  console.error('Missing required TON configuration:', {
+    SPIDER_TOKEN_ADDRESS: !!SPIDER_TOKEN_ADDRESS,
+    TON_API_ENDPOINT: !!TON_API_ENDPOINT,
+    GAME_WALLET_ADDRESS: !!GAME_WALLET_ADDRESS
+  });
+}
 
 /**
  * Fetches a user's $SPIDER token balance from the TON blockchain
- * @param walletAddress TON wallet address
- * @returns The token balance or null if there was an error
  */
 export const fetchSpiderTokenBalance = async (walletAddress: string): Promise<number | null> => {
   try {
-    // In a real implementation, this would make a request to the TON blockchain
-    // or use a service like TON API or TON Center to get token balances
+    if (!walletAddress) {
+      console.warn('No wallet address provided to fetchSpiderTokenBalance');
+      return null;
+    }
+
+    if (!TON_API_ENDPOINT || !SPIDER_TOKEN_ADDRESS) {
+      console.error('TON configuration missing');
+      return null;
+    }
+
+    const response = await axios.get(`${TON_API_ENDPOINT}/balance/${walletAddress}`, {
+      params: {
+        token_address: SPIDER_TOKEN_ADDRESS
+      }
+    });
+
+    if (response.data.success) {
+      return typeof response.data.balance === 'number' ? response.data.balance : null;
+    }
     
-    // For now, we will stub this functionality
-    // You would typically use TON SDK or a TON API service to fetch token balances
-    
-    console.log('Fetching $SPIDER balance for wallet:', walletAddress);
-    
-    // TODO: Replace with actual blockchain query implementation
-    // Return the current mock balance (will decrease as transactions occur)
-    return mockBalance;
+    console.error('Failed to fetch balance:', response.data.message);
+    return null;
   } catch (error) {
     console.error('Error fetching $SPIDER token balance:', error);
     return null;
@@ -32,23 +51,7 @@ export const fetchSpiderTokenBalance = async (walletAddress: string): Promise<nu
 };
 
 /**
- * Updates the mock balance for development purposes
- * This simulates a blockchain transaction
- * @param amount Amount to subtract from balance
- */
-export const updateMockBalance = (amount: number): void => {
-  mockBalance -= amount;
-  console.log(`Mock balance updated. New balance: ${mockBalance}`);
-};
-
-/**
- * Deposits $SPIDER tokens from TON blockchain to Firebase profile
- * In a real implementation, this would create a transaction on the blockchain
- * 
- * @param userId Firebase user ID
- * @param walletAddress TON wallet address
- * @param amount Amount of tokens to deposit
- * @returns Transaction ID or null if failed
+ * Initiates a deposit transaction from user's wallet to game wallet
  */
 export const depositSpiderTokens = async (
   userId: string, 
@@ -60,18 +63,7 @@ export const depositSpiderTokens = async (
       throw new Error('Deposit amount must be greater than zero');
     }
     
-    console.log(`Processing deposit of ${amount} $SPIDER tokens from wallet ${walletAddress} for user ${userId}`);
-    
-    // 1. In a real implementation, this would:
-    //    - Create a transaction on the TON blockchain to transfer tokens
-    //    - Wait for the transaction to be confirmed
-    //    - Verify the transaction on the blockchain
-    
-    // For development, we'll simulate a successful transaction
-    // Decrease the mock blockchain balance
-    updateMockBalance(amount);
-    
-    // 2. Create a transaction record in Firestore
+    // 1. Create a pending transaction record
     const transactionId = `tx-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const transactionRef = doc(db, 'transactions', transactionId);
     
@@ -80,82 +72,109 @@ export const depositSpiderTokens = async (
       walletAddress,
       amount,
       type: 'deposit',
-      status: 'completed',
+      status: 'pending',
+      targetAddress: GAME_WALLET_ADDRESS,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    
-    // 3. Update the player's balance in Firestore
-    // Get current balance
-    const userRef = doc(db, 'gameProfiles', userId);
-    const userDoc = await getDoc(userRef);
-    
-    if (!userDoc.exists()) {
-      throw new Error('User profile not found');
-    }
-    
-    const currentBalance = userDoc.data()?.balance?.SPIDER || 0;
-    const newBalance = currentBalance + amount;
-    
-    // Update player balance
-    await updatePlayerBalance(userId, { SPIDER: newBalance });
-    
-    console.log(`Successfully deposited ${amount} $SPIDER tokens. New balance: ${newBalance}`);
-    
+
+    // 2. Return transaction ID - the UI will use this to check status
     return transactionId;
   } catch (error) {
-    console.error('Error depositing $SPIDER tokens:', error);
+    console.error('Error initiating deposit:', error);
     return null;
   }
 };
 
 /**
- * Links a TON wallet address to a user in Firestore
- * @param userId Firebase user ID
- * @param walletAddress TON wallet address
+ * Verifies a deposit transaction and updates game balance if confirmed
  */
-export const linkWalletToUser = async (userId: string, walletAddress: string): Promise<void> => {
+export const verifyDepositTransaction = async (
+  transactionId: string,
+  txHash: string
+): Promise<boolean> => {
   try {
-    const userRef = doc(db, 'users', userId);
-    const userDoc = await getDoc(userRef);
-    
-    if (userDoc.exists()) {
-      // Update user document with wallet address
-      await updateDoc(userRef, {
-        walletAddress,
-        updatedAt: serverTimestamp()
-      });
-    } else {
-      // Create user document with wallet address
-      await setDoc(userRef, {
-        walletAddress,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
+    // 1. Verify transaction on blockchain
+    const response = await axios.post(`${TON_API_ENDPOINT}/verify-transaction`, {
+      txHash,
+      expectedReceiver: GAME_WALLET_ADDRESS
+    });
+
+    if (!response.data.success) {
+      throw new Error('Transaction verification failed');
     }
+
+    // 2. Get transaction details from Firestore
+    const transactionRef = doc(db, 'transactions', transactionId);
+    const transactionDoc = await getDoc(transactionRef);
+    
+    if (!transactionDoc.exists()) {
+      throw new Error('Transaction not found');
+    }
+
+    const transaction = transactionDoc.data();
+
+    // 3. Update transaction status and player balance
+    await updateDoc(transactionRef, {
+      status: 'completed',
+      txHash,
+      confirmedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    // 4. Update player's game balance
+    await updatePlayerBalance(transaction.userId, {
+      SPIDER: transaction.amount
+    });
+
+    return true;
   } catch (error) {
-    console.error('Error linking wallet to user:', error);
-    throw error;
+    console.error('Error verifying deposit:', error);
+    return false;
   }
 };
 
 /**
- * Gets the linked wallet address for a user
- * @param userId Firebase user ID
- * @returns The wallet address or null if not found
+ * Gets wallet address for a user with better error handling
  */
 export const getUserWalletAddress = async (userId: string): Promise<string | null> => {
   try {
-    const userRef = doc(db, 'users', userId);
-    const userDoc = await getDoc(userRef);
+    if (!userId) {
+      console.warn('No user ID provided to getUserWalletAddress');
+      return null;
+    }
+
+    const userDoc = await getDoc(doc(db, 'users', userId));
     
-    if (userDoc.exists() && userDoc.data().walletAddress) {
-      return userDoc.data().walletAddress;
+    if (!userDoc.exists()) {
+      console.warn(`No user document found for ID: ${userId}`);
+      return null;
     }
     
-    return null;
+    const data = userDoc.data();
+    return data?.walletAddress || null;
   } catch (error) {
-    console.error('Error getting user wallet address:', error);
+    console.error('Error getting wallet address:', error);
     return null;
   }
-}; 
+};
+
+/**
+ * Links a wallet address to a user with validation
+ */
+export const linkWalletToUser = async (userId: string, walletAddress: string): Promise<void> => {
+  try {
+    if (!userId || !walletAddress) {
+      throw new Error('User ID and wallet address are required');
+    }
+
+    await setDoc(doc(db, 'users', userId), {
+      walletAddress,
+      updatedAt: serverTimestamp(),
+      lastWalletLinkTime: serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    console.error('Error linking wallet:', error);
+    throw error;
+  }
+};

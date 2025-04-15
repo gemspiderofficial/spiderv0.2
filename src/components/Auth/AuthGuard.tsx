@@ -1,7 +1,6 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthContext } from '../../contexts/AuthContext';
-import Login from './Login';
 import { LoadingScreen } from '../LoadingScreen';
 
 interface AuthGuardProps {
@@ -10,45 +9,37 @@ interface AuthGuardProps {
 }
 
 const AuthGuard: React.FC<AuthGuardProps> = ({ children, requireAuth = true }) => {
-  const { isAuthenticated, isLoading, playerProfile, isPlayerProfileLoading } = useAuthContext();
+  const { 
+    isAuthenticated,
+    isLoading,
+    playerProfile,
+    isPlayerProfileLoading,
+    playerProfileError
+  } = useAuthContext();
   const location = useLocation();
 
-  // Only show loading screen during initial authentication check
-  if (isLoading) {
+  // Show loading screen during initial auth check or when fetching player profile
+  if (isLoading || (isAuthenticated && isPlayerProfileLoading)) {
     return <LoadingScreen />;
   }
 
-  // If authentication is required and user is not authenticated, show login
-  if (requireAuth && !isAuthenticated) {
-    // Store the attempted URL for redirection after login
-    const currentPath = location.pathname + location.search;
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="w-full max-w-md">
-          <Login 
-            onSuccess={() => {
-              // The auth state change will trigger a re-render
-              console.log('Login successful, continuing to:', currentPath);
-            }} 
-          />
-        </div>
-      </div>
-    );
+  // Handle public routes (e.g., login page)
+  if (!requireAuth) {
+    return isAuthenticated ? <Navigate to="/" replace /> : <>{children}</>;
   }
 
-  // Show loading screen while fetching player profile
-  if (requireAuth && isAuthenticated && isPlayerProfileLoading) {
-    return <LoadingScreen />;
+  // Handle protected routes
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If we require auth and have no player profile after loading, something went wrong
-  if (requireAuth && isAuthenticated && !isPlayerProfileLoading && !playerProfile) {
-    console.error('No player profile found after authentication');
-    // Redirect to login and force a fresh authentication
+  // Handle player profile error or missing profile
+  if (playerProfileError || (!isPlayerProfileLoading && !playerProfile)) {
+    console.error('Player profile error or missing:', playerProfileError);
     return <Navigate to="/login" replace />;
   }
 
-  // User is authenticated (or auth not required) and we have the profile if needed
+  // All checks passed, render the protected content
   return <>{children}</>;
 };
 
