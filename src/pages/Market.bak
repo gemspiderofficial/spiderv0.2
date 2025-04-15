@@ -1,0 +1,640 @@
+import React, { useState, lazy, Suspense } from 'react';
+import { useGameStore } from '../store/useGameStore';
+import { motion, AnimatePresence } from 'framer-motion';
+import { LoadingScreen } from '../components/LoadingScreen';
+import { Dialog } from '@headlessui/react';
+
+// Lazy load SpiderModal
+const SpiderModal = lazy(() => import('../components/modals/SpiderModal').then(mod => ({ default: mod.SpiderModal })));
+
+// Define missing types
+type CategoryId = 'EGG' | 'SPIDER' | 'DRESS' | 'FEEDERS';
+type MarketView = 'BUY' | 'SELL' | 'MY_LISTINGS';
+
+interface Category {
+  id: CategoryId;
+  name: string;
+  icon: string;
+}
+
+interface MarketItem {
+  id: number | string;
+  name: string;
+  price: number;
+  description: string;
+  icon: string;
+}
+
+interface MarketItems {
+  [key: string]: MarketItem[];
+}
+
+interface ListedItem {
+  id: string;
+  type: CategoryId;
+  itemId: string;
+  name: string;
+  price: number;
+  seller: string;
+  icon: string;
+  description: string;
+}
+
+// Add SellConfirmation component
+function SellConfirmation({ isOpen, onClose, item, price, onConfirm }: {
+  isOpen: boolean;
+  onClose: () => void;
+  item: any;
+  price: string;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
+      
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel 
+          className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl relative"
+        >
+          <Dialog.Title className="text-xl font-bold mb-4 text-center">
+            Confirm Listing
+          </Dialog.Title>
+
+          <div className="space-y-4">
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-2xl">{item.icon}</span>
+                <div>
+                  <h3 className="font-bold text-gray-800">{item.name}</h3>
+                  <p className="text-sm text-gray-500">{item.description}</p>
+                </div>
+              </div>
+              <div className="font-medium text-gray-800">
+                Price: {price} $SPIDER
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-500">
+              Are you sure you want to list this item for sale? A 10% fee will be charged when sold.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 bg-gray-100 py-2 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 text-white py-2 rounded-xl font-medium"
+              >
+                Confirm Listing
+              </button>
+            </div>
+          </div>
+        </Dialog.Panel>
+      </div>
+    </Dialog>
+  );
+}
+
+// Add BuyConfirmation component
+function BuyConfirmation({ isOpen, onClose, item, onConfirm }: {
+  isOpen: boolean;
+  onClose: () => void;
+  item: any;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
+      
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel 
+          className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl relative"
+        >
+          <Dialog.Title className="text-xl font-bold mb-4 text-center">
+            Confirm Purchase
+          </Dialog.Title>
+
+          <div className="space-y-4">
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-2xl">{item.icon}</span>
+                <div>
+                  <h3 className="font-bold text-gray-800">{item.name}</h3>
+                  <p className="text-sm text-gray-500">{item.description}</p>
+                </div>
+              </div>
+              <div className="font-medium text-gray-800">
+                Price: {item.price} $SPIDER
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-500">
+              Are you sure you want to purchase this item? This action cannot be undone.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 bg-gray-100 py-2 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                className="flex-1 bg-gradient-to-r from-green-500 to-blue-500 text-white py-2 rounded-xl font-medium"
+              >
+                Confirm Purchase
+              </button>
+            </div>
+          </div>
+        </Dialog.Panel>
+      </div>
+    </Dialog>
+  );
+}
+
+// Add PriceInputModal component
+function PriceInputModal({ isOpen, onClose, item, onConfirm }: {
+  isOpen: boolean;
+  onClose: () => void;
+  item: any;
+  onConfirm: (price: number) => void;
+}) {
+  const [price, setPrice] = useState<string>('');
+
+  const handleConfirm = () => {
+    if (!price || isNaN(Number(price))) return;
+    onConfirm(Number(price));
+    setPrice('');
+  };
+
+  return (
+    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
+      
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel 
+          className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl relative"
+        >
+          <Dialog.Title className="text-xl font-bold mb-4 text-center">
+            Set Listing Price
+          </Dialog.Title>
+
+          <div className="space-y-4">
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-2xl">{item.icon}</span>
+                <div>
+                  <h3 className="font-bold text-gray-800">{item.name}</h3>
+                  <p className="text-sm text-gray-500">{item.description}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="price" className="block text-sm font-medium text-gray-700">
+                Price in $SPIDER
+              </label>
+              <input
+                type="number"
+                id="price"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="Enter price"
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm"
+                min="1"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 bg-gray-100 py-2 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 text-white py-2 rounded-xl font-medium"
+                disabled={!price || isNaN(Number(price)) || Number(price) <= 0}
+              >
+                Set Price
+              </button>
+            </div>
+          </div>
+        </Dialog.Panel>
+      </div>
+    </Dialog>
+  );
+}
+
+// Update the Market component to use these new modals
+function Market() {
+  const { player, market, listItem, cancelListing, buyListing } = useGameStore();
+  const { balance } = player;
+  const [activeCategory, setActiveCategory] = useState<CategoryId>('EGG');
+  const [activeView, setActiveView] = useState<MarketView>('BUY');
+  const [sellPrice, setSellPrice] = useState<string>('');
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [inspectSpider, setInspectSpider] = useState<string | null>(null);
+  const [showSellConfirmation, setShowSellConfirmation] = useState(false);
+  const [showBuyConfirmation, setShowBuyConfirmation] = useState(false);
+  const [itemToBuy, setItemToBuy] = useState<ListedItem | null>(null);
+
+  const categories: Category[] = [
+    { id: 'EGG', name: 'Eggs', icon: '🥚' },
+    { id: 'SPIDER', name: 'Spiders', icon: '🕷️' },
+    { id: 'DRESS', name: 'Dress', icon: '👕' },
+    { id: 'FEEDERS', name: 'Feeders', icon: '🪲' },
+  ];
+
+  const marketItems: MarketItems = {
+    EGG: [
+      { id: 1, name: 'Common Egg', price: 500, description: 'Hatch a common spider', icon: '🥚' },
+      { id: 2, name: 'Rare Egg', price: 1000, description: 'Higher chance of rare spider', icon: '🥚' },
+    ],
+    SPIDER: [], // Remove mock spiders since they don't have proper IDs
+    DRESS: [
+      { id: 5, name: 'Spider Hat', price: 100, description: 'Cute hat for your spider', icon: '🎩' },
+      { id: 6, name: 'Spider Boots', price: 150, description: 'Boots for speed', icon: '👢' },
+    ],
+    FEEDERS: [
+      { id: 7, name: 'Basic Feeder Pack', price: 100, description: '10x Feeders', icon: '🪲' },
+      { id: 8, name: 'Premium Feeder Pack', price: 250, description: '30x Feeders', icon: '🪲' },
+    ],
+  };
+
+  // Mock player's items that can be sold
+  const playerItems = {
+    SPIDER: player.spiders
+      .filter(spider => !spider.isListed) // Only show unlisted spiders
+      .map(spider => ({
+        id: spider.id,
+        name: spider.name,
+        description: `Level ${spider.level} ${spider.rarity} Spider`,
+        icon: '🕷️'
+    })),
+    DRESS: [], // Add player's dress items here
+    FEEDERS: [{ id: 'feeder1', name: 'Feeders', description: `${player.balance.feeders} available`, icon: '🪲' }],
+  };
+
+  const handleSellItem = () => {
+    if (!selectedItem || !sellPrice) return;
+    setShowSellConfirmation(true);
+  };
+
+  const confirmSellItem = () => {
+    if (!selectedItem || !sellPrice) return;
+    
+    // Create a new listing
+    const newListing: ListedItem = {
+      id: `list-${Date.now()}`, // Generate a unique ID
+      type: activeCategory as CategoryId,
+      itemId: selectedItem.id, // This is the original spider/item ID
+      name: selectedItem.name,
+      price: Number(sellPrice),
+      seller: 'You', // Replace with actual player name/address
+      icon: selectedItem.icon,
+      description: selectedItem.description
+    };
+
+    // Add to listings via store action
+    listItem(newListing);
+
+    // Reset states
+    setShowSellConfirmation(false);
+    setSelectedItem(null);
+    setSellPrice('');
+    
+    // Switch to MY_LISTINGS view
+    setActiveView('MY_LISTINGS');
+  };
+
+  const handleBuyListing = (item: ListedItem) => {
+    if (balance.SPIDER < item.price) return;
+    
+    // Add confirmation before purchase
+    if (window.confirm(`Are you sure you want to buy ${item.name} for ${item.price} $SPIDER?`)) {
+      buyListing(item.id);
+      // Show success message
+      alert('Purchase successful! Check your spiders in the Dashboard.');
+      // Optionally redirect to dashboard
+      // window.location.href = '/dashboard';
+    }
+  };
+
+  const handleInspectItem = (item: any) => {
+    if (activeCategory === 'SPIDER') {
+      const spiderToInspect = player.spiders.find(s => s.id === item.itemId);
+      if (spiderToInspect) {
+        setInspectSpider(spiderToInspect.id);
+      }
+    }
+  };
+
+  // Fix the renderListItem function with proper types
+  const renderListItem = (item: MarketItem | ListedItem, index: number, isPlayerListing: boolean = false) => (
+    <motion.div
+      key={item.id}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 * (index + 1) }}
+      whileHover={{ scale: 1.02 }}
+      onClick={() => handleInspectItem(item)}
+      className="bg-gradient-to-br from-blue-500/5 to-purple-500/5 p-3 rounded-lg backdrop-blur-sm border border-white/20 shadow-md relative overflow-hidden group cursor-pointer"
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/0 to-purple-500/0 group-hover:from-blue-500/5 group-hover:to-purple-500/5 transition-all duration-300" />
+      
+      <div className="relative flex items-center gap-3">
+        <span className="text-xl shrink-0">{item.icon}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-bold text-gray-800 truncate">{item.name}</h3>
+            <span className="font-bold text-gray-800 shrink-0">{item.price} $SPIDER</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-gray-500 truncate">{item.description}</p>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                isPlayerListing && 'type' in item ? handleBuyListing(item as ListedItem) : null;
+              }}
+              className={`shrink-0 px-3 py-1 rounded-md text-xs font-medium shadow-sm hover:shadow transition-shadow disabled:opacity-50 disabled:cursor-not-allowed ${
+                isPlayerListing 
+                  ? 'bg-gradient-to-r from-green-500 to-blue-500 text-white'
+                  : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white'
+              }`}
+              disabled={balance.SPIDER < item.price}
+            >
+              Buy Now
+            </motion.button>
+          </div>
+          {isPlayerListing && (
+            <p className="text-xs text-gray-400 mt-0.5">
+              Seller: {'seller' in item ? item.seller : 'Official Market'}
+            </p>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+
+  const renderContent = () => {
+    switch (activeView) {
+      case 'SELL':
+        return (
+          <div className="space-y-4">
+            <div className="bg-white/50 backdrop-blur-sm p-4 rounded-xl border border-white/20">
+              <h3 className="font-semibold mb-2 text-sm">Select item to sell</h3>
+              <div className="grid grid-cols-1 gap-2">
+                {playerItems[activeCategory as keyof typeof playerItems]?.map((item: any) => (
+                  <motion.button
+                    key={item.id}
+                    whileHover={{ scale: 1.01 }}
+                    onClick={() => setSelectedItem(item)}
+                    className={`p-2 rounded-lg border ${selectedItem?.id === item.id ? 'border-purple-500 bg-purple-50/50' : 'border-white/20 bg-white/30'} flex items-center gap-3`}
+                  >
+                    <span className="text-xl">{item.icon}</span>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-medium truncate">{item.name}</div>
+                      <div className="text-xs text-gray-500 truncate">{item.description}</div>
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+              {selectedItem && (
+                <div className="mt-4 flex gap-2">
+                  <input
+                    type="number"
+                    value={sellPrice}
+                    onChange={(e) => setSellPrice(e.target.value)}
+                    placeholder="Enter price in $SPIDER"
+                    className="flex-1 px-3 py-1.5 rounded-lg border border-white/20 bg-white/50 backdrop-blur-sm text-sm"
+                    min="0"
+                  />
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleSellItem}
+                    className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-1.5 rounded-lg font-medium text-sm"
+                    disabled={!sellPrice}
+                  >
+                    List for Sale
+                  </motion.button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'MY_LISTINGS':
+        return (
+          <div className="space-y-4">
+            {market.myListings.length === 0 ? (
+              <div className="text-center text-gray-500 py-8 text-sm">
+                No active listings
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2">
+                {market.myListings.map((item, index) => (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 * (index + 1) }}
+                    className="bg-gradient-to-br from-blue-500/5 to-purple-500/5 p-3 rounded-lg backdrop-blur-sm border border-white/20 shadow-md relative overflow-hidden"
+                  >
+                    <div className="relative flex items-center gap-3">
+                      <span className="text-xl shrink-0">{item.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="font-bold text-gray-800 truncate">{item.name}</h3>
+                          <span className="font-bold text-gray-800 shrink-0">{item.price} $SPIDER</span>
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">{item.description}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-gray-400">Listed for sale</span>
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => cancelListing(item.id)}
+                            className="text-xs text-red-500 hover:text-red-600"
+                          >
+                            Cancel Listing
+                          </motion.button>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+
+      default: // BUY view
+        return (
+          <div className="space-y-4">
+            {/* Official Market Items */}
+            <div className="grid grid-cols-1 gap-2">
+              {marketItems[activeCategory].map((item, index) => renderListItem(item, index))}
+            </div>
+
+            {/* Player Listings */}
+            {market.marketListings.filter(item => item.type === activeCategory).length > 0 && (
+              <>
+                <div className="border-t border-white/20 my-4" />
+                <h3 className="font-semibold mb-2 text-sm">Player Listings</h3>
+                <div className="grid grid-cols-1 gap-2">
+                  {market.marketListings
+                    .filter(item => item.type === activeCategory)
+                    .map((item, index) => renderListItem(item, index, true))}
+                </div>
+              </>
+            )}
+          </div>
+        );
+    }
+  };
+
+  return (
+    <>
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-6 p-4 max-w-4xl mx-auto"
+      >
+        <div className="bg-white/80 backdrop-blur-lg p-8 rounded-2xl shadow-2xl relative overflow-hidden min-h-[calc(100vh-8rem)]">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-pink-500/10 animate-gradient-xy" />
+          
+          <div className="relative">
+            <div className="flex justify-between items-start mb-6">
+              <motion.h1 
+                initial={{ x: -20 }}
+                animate={{ x: 0 }}
+                className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"
+              >
+                Market
+              </motion.h1>
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="text-right"
+              >
+                <div className="flex flex-col gap-0.5">
+                  <div>
+                    <p className="text-xs text-gray-500">$SPIDER Balance</p>
+                    <p className="font-bold text-lg text-gray-800 -mt-0.5">{balance.SPIDER}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Feeders</p>
+                    <p className="font-bold text-lg text-gray-800 -mt-0.5">{balance.feeders}</p>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+
+            {/* View Toggle */}
+            <div className="flex gap-2 mb-4">
+              {(['BUY', 'SELL', 'MY_LISTINGS'] as const).map((view) => (
+                <motion.button
+                  key={view}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setActiveView(view)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                    activeView === view 
+                      ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md' 
+                      : 'bg-white/50 text-gray-700 hover:bg-white/60'
+                  }`}
+                >
+                  {view.replace('_', ' ')}
+                </motion.button>
+              ))}
+            </div>
+
+            {/* Category Buttons */}
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex gap-2 mb-6"
+            >
+              {categories.map((category) => (
+                <motion.button
+                  key={category.id}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setActiveCategory(category.id)}
+                  className={`flex-1 relative py-1.5 px-3 rounded-lg backdrop-blur-sm border border-white/20 shadow-md overflow-hidden group
+                    ${activeCategory === category.id 
+                      ? 'bg-gradient-to-br from-purple-500/20 to-blue-500/20' 
+                      : 'bg-white/50 hover:bg-white/60'}`}
+                >
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span className="text-base">{category.icon}</span>
+                    <span className={`text-sm font-medium ${activeCategory === category.id ? 'text-purple-900' : 'text-gray-700'}`}>
+                      {category.name}
+                    </span>
+                  </div>
+                  {activeCategory === category.id && (
+                    <motion.div 
+                      layoutId="activeTab"
+                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-blue-500"
+                    />
+                  )}
+                </motion.button>
+              ))}
+            </motion.div>
+
+            {/* Content Area */}
+            {renderContent()}
+      </div>
+    </div>
+      </motion.div>
+
+      {/* Spider Modal */}
+      <Suspense fallback={<LoadingScreen fullscreen={false} />}>
+        {inspectSpider && (
+          <SpiderModal
+            isOpen={!!inspectSpider}
+            onClose={() => {
+              setInspectSpider(null);
+              setSelectedMarketItem(null);
+            }}
+            spiderId={inspectSpider}
+            marketContext={
+              selectedMarketItem
+                ? {
+                    price: selectedMarketItem.price,
+                    onBuy: handleBuySpider,
+                    isOwned: false, // You might want to check if the player owns this spider
+                  }
+                : undefined
+            }
+          />
+        )}
+      </Suspense>
+
+      {/* Sell Confirmation Modal */}
+      <AnimatePresence>
+        {showSellConfirmation && selectedItem && (
+          <SellConfirmation
+            isOpen={showSellConfirmation}
+            onClose={() => setShowSellConfirmation(false)}
+            item={selectedItem}
+            price={sellPrice}
+            onConfirm={confirmSellItem}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+export default Market;

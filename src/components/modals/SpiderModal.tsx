@@ -1,0 +1,302 @@
+import React from 'react';
+import { Dialog } from '@headlessui/react';
+import { useGameStore } from '../../store/useGameStore';
+import { XMarkIcon } from '@heroicons/react/24/outline';
+import { SpiderLevelInfo } from '../SpiderLevelInfo';
+import { getSpiderImage } from '../../utils/spiderImage';
+import { RARITY_COLORS, RARITY_TEXT_COLORS } from '../../constants/game';
+
+// Add keyframes animation
+const rotateKeyframes = `
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+`;
+
+interface SpiderModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  spiderId: string;
+}
+
+interface SpiderStats {
+  attack: number;
+  defense: number;
+  agility: number;
+  luck: number;
+}
+
+const StatsDiamond = ({ stats, power, rarity }: { stats: SpiderStats; power: number; rarity: string }) => {
+  // Scale down large numbers for visual display (1-10 scale)
+  const scaleValue = (value: number) => {
+    const scaled = Math.min(10, Math.ceil(value / 50));
+    return scaled;
+  };
+
+  // Get rarity color
+  const rarityColor = RARITY_COLORS[rarity as keyof typeof RARITY_COLORS] || RARITY_COLORS.Common;
+  const rarityRGB = rarityColor.replace('rgb(', '').replace(')', '').split(',').map(x => parseInt(x.trim()));
+  
+  // Get genetic colors
+  const geneticColors = {
+    attack: 'rgb(239, 68, 68)', // red-500
+    defense: 'rgb(34, 197, 94)', // green-500
+    agility: 'rgb(59, 130, 246)', // blue-500
+    luck: 'rgb(168, 85, 247)', // purple-500
+  };
+  
+  return (
+    <div className="relative w-64 h-64 mx-auto">
+      {/* Background glow effect */}
+      <div 
+        className="absolute inset-0 blur-2xl rounded-full"
+        style={{ 
+          backgroundColor: `rgba(${rarityRGB[0]}, ${rarityRGB[1]}, ${rarityRGB[2]}, 0.2)` 
+        }}
+      />
+      
+      <svg className="absolute inset-0 w-full h-full">
+        {/* Background diamond with gradient */}
+        <defs>
+          <linearGradient id="statsGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={`rgba(${rarityRGB[0]}, ${rarityRGB[1]}, ${rarityRGB[2]}, 0.1)`} />
+            <stop offset="50%" stopColor={`rgba(${rarityRGB[0]}, ${rarityRGB[1]}, ${rarityRGB[2]}, 0.2)`} />
+            <stop offset="100%" stopColor={`rgba(${rarityRGB[0]}, ${rarityRGB[1]}, ${rarityRGB[2]}, 0.1)`} />
+          </linearGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* Outer diamond */}
+        <polygon 
+          points="32,128 128,32 224,128 128,224" 
+          fill="url(#statsGradient)"
+          stroke={`rgba(${rarityRGB[0]}, ${rarityRGB[1]}, ${rarityRGB[2]}, 0.5)`}
+          strokeWidth="1"
+          filter="url(#glow)"
+        />
+
+        {/* Inner reference diamond */}
+        <polygon 
+          points="80,128 128,80 176,128 128,176" 
+          fill="none" 
+          stroke={`rgba(${rarityRGB[0]}, ${rarityRGB[1]}, ${rarityRGB[2]}, 0.3)`}
+          strokeWidth="1"
+          strokeDasharray="4,4"
+        />
+
+        {/* Cross lines */}
+        <line x1="128" y1="32" x2="128" y2="224" 
+          stroke={`rgba(${rarityRGB[0]}, ${rarityRGB[1]}, ${rarityRGB[2]}, 0.2)`} 
+          strokeWidth="1" 
+          strokeDasharray="4,4" 
+        />
+        <line x1="32" y1="128" x2="224" y2="128" 
+          stroke={`rgba(${rarityRGB[0]}, ${rarityRGB[1]}, ${rarityRGB[2]}, 0.2)`} 
+          strokeWidth="1" 
+          strokeDasharray="4,4" 
+        />
+      </svg>
+
+      {/* Stats with glowing indicators */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 text-center">
+        <div style={{ color: geneticColors.attack }} className="font-bold">ATK</div>
+        <div className="w-3 h-3 transform rotate-45 mx-auto shadow-lg transition-all duration-300" 
+             style={{
+               background: `linear-gradient(to bottom right, ${geneticColors.attack}, ${geneticColors.attack}cc)`,
+               opacity: `${scaleValue(stats.attack) * 10}%`,
+               boxShadow: `0 0 10px ${geneticColors.attack}80`
+             }} />
+        <div className="mt-1 text-lg font-bold" style={{ color: geneticColors.attack }}>{stats.attack}</div>
+      </div>
+
+      <div className="absolute right-0 top-1/2 -translate-y-1/2 text-center">
+        <div style={{ color: geneticColors.defense }} className="font-bold">DEF</div>
+        <div className="w-3 h-3 transform rotate-45 mx-auto shadow-lg transition-all duration-300"
+             style={{
+               background: `linear-gradient(to bottom right, ${geneticColors.defense}, ${geneticColors.defense}cc)`,
+               opacity: `${scaleValue(stats.defense) * 10}%`,
+               boxShadow: `0 0 10px ${geneticColors.defense}80`
+             }} />
+        <div className="mt-1 text-lg font-bold" style={{ color: geneticColors.defense }}>{stats.defense}</div>
+      </div>
+
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 text-center">
+        <div style={{ color: geneticColors.agility }} className="font-bold">AGI</div>
+        <div className="w-3 h-3 transform rotate-45 mx-auto shadow-lg transition-all duration-300"
+             style={{
+               background: `linear-gradient(to bottom right, ${geneticColors.agility}, ${geneticColors.agility}cc)`,
+               opacity: `${scaleValue(stats.agility) * 10}%`,
+               boxShadow: `0 0 10px ${geneticColors.agility}80`
+             }} />
+        <div className="mt-1 text-lg font-bold" style={{ color: geneticColors.agility }}>{stats.agility}</div>
+      </div>
+
+      <div className="absolute left-0 top-1/2 -translate-y-1/2 text-center">
+        <div style={{ color: geneticColors.luck }} className="font-bold">LUCK</div>
+        <div className="w-3 h-3 transform rotate-45 mx-auto shadow-lg transition-all duration-300"
+             style={{
+               background: `linear-gradient(to bottom right, ${geneticColors.luck}, ${geneticColors.luck}cc)`,
+               opacity: `${scaleValue(stats.luck) * 10}%`,
+               boxShadow: `0 0 10px ${geneticColors.luck}80`
+             }} />
+        <div className="mt-1 text-lg font-bold" style={{ color: geneticColors.luck }}>{stats.luck}</div>
+      </div>
+
+      {/* Center Power Display */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="text-center relative rounded-full p-4 shadow-lg"
+             style={{ 
+               background: `linear-gradient(135deg,
+                 rgba(0, 0, 0, 0.95),
+                 rgba(${rarityRGB[0]}, ${rarityRGB[1]}, ${rarityRGB[2]}, 0.3),
+                 rgba(0, 0, 0, 0.95)
+               )`,
+               boxShadow: `0 0 20px rgba(${rarityRGB[0]}, ${rarityRGB[1]}, ${rarityRGB[2]}, 0.4)`
+             }}>
+          <div className="absolute inset-0 rounded-full opacity-30"
+               style={{
+                 background: `radial-gradient(circle at 50% 50%, 
+                   rgba(${rarityRGB[0]}, ${rarityRGB[1]}, ${rarityRGB[2]}, 0.4), 
+                   transparent 70%)`
+               }}
+          />
+          <div style={{ color: rarityColor }} className="font-bold relative">PWR</div>
+          <div className="text-2xl font-bold text-transparent bg-clip-text relative"
+               style={{ 
+                 backgroundImage: `linear-gradient(to right, ${rarityColor}, ${rarityColor}cc, ${rarityColor})`
+               }}>
+            {power}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export function SpiderModal({ isOpen, onClose, spiderId }: SpiderModalProps) {
+  const { player } = useGameStore();
+  const spider = player.spiders.find(s => s.id === spiderId);
+
+  if (!spider) return null;
+
+  // Get genetic display text with color
+  const getGeneticDisplay = (genetic: string) => {
+    const colors: Record<string, string> = {
+      'S': 'text-blue-500',
+      'A': 'text-green-500',
+      'J': 'text-purple-500',
+      'SA': 'text-indigo-500',
+      'SJ': 'text-cyan-500',
+      'AJ': 'text-emerald-500',
+      'SAJ': 'text-amber-500 font-bold',
+    };
+    
+    return <span className={colors[genetic] || 'text-gray-500'}>{genetic}</span>;
+  };
+
+  // Get rarity color and glow
+  const getRarityColor = (rarity: string): { text: string; glow: string } => {
+    const color = RARITY_COLORS[rarity as keyof typeof RARITY_COLORS] || RARITY_COLORS.Common;
+    return {
+      text: RARITY_TEXT_COLORS[rarity as keyof typeof RARITY_TEXT_COLORS] || RARITY_TEXT_COLORS.Common,
+      glow: `bg-[${color}]/20`
+    };
+  };
+
+  const rarityStyle = getRarityColor(spider.rarity);
+  
+  // Get rarity color and RGB values
+  const rarityColor = RARITY_COLORS[spider.rarity as keyof typeof RARITY_COLORS] || RARITY_COLORS.Common;
+  const rarityRGB = rarityColor.replace('rgb(', '').replace(')', '').split(',').map(x => parseInt(x.trim()));
+
+  return (
+    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
+      <style>{rotateKeyframes}</style>
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
+      
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-xl relative sm:max-w-md md:max-w-lg max-h-[90vh] overflow-y-auto scrollbar-hide">
+          {/* Close button in the upper right corner */}
+          <button 
+            onClick={onClose}
+            className="absolute top-3 right-3 p-1 rounded-full bg-gray-200 hover:bg-gray-300 transition-colors z-10"
+            aria-label="Close"
+          >
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+          
+          <Dialog.Title className="text-xl font-bold mb-4 text-center mt-1">
+            Spider Details
+          </Dialog.Title>
+
+          <div className="space-y-4">
+            {/* Spider Image and Basic Info */}
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                {/* Rotating glow effect */}
+                <div 
+                  className="absolute inset-0 rounded-xl blur-xl opacity-50 animate-[rotate_8s_linear_infinite]"
+                  style={{ backgroundColor: RARITY_COLORS[spider.rarity as keyof typeof RARITY_COLORS] || RARITY_COLORS.Common }}
+                />
+                {/* Static glow effect */}
+                <div 
+                  className="absolute inset-0 rounded-xl blur-xl opacity-30"
+                  style={{ backgroundColor: RARITY_COLORS[spider.rarity as keyof typeof RARITY_COLORS] || RARITY_COLORS.Common }}
+                />
+                {/* Image container */}
+                <div 
+                  className="w-24 h-24 rounded-xl flex items-center justify-center overflow-hidden relative"
+                  style={{ backgroundColor: RARITY_COLORS[spider.rarity as keyof typeof RARITY_COLORS] || RARITY_COLORS.Common }}
+                >
+                <img 
+                  src={getSpiderImage(spider.genetics)} 
+                  alt="Spider" 
+                  className="w-full h-full object-cover"
+                />
+                </div>
+              </div>
+              <div>
+                <h3 className="font-bold text-lg">{spider.name}</h3>
+                <p className={`${rarityStyle.text} font-medium`}>{spider.rarity}</p>
+                <p className="text-sm text-gray-600">Genetics: {getGeneticDisplay(spider.genetics)}</p>
+                <p className="text-sm text-gray-600">Gender: {spider.gender}</p>
+                <p className="text-sm text-gray-600">Generation: {spider.generation}</p>
+                <p className="text-xs text-gray-500 mt-1 break-all">ID: {spider.uniqueId}</p>
+              </div>
+            </div>
+
+            {/* Level Info */}
+            <SpiderLevelInfo spider={spider} />
+            
+            {/* Stats */}
+            <div className="mt-4 rounded-lg p-6 shadow-xl relative overflow-hidden"
+                 style={{ 
+                   backgroundColor: RARITY_COLORS[spider.rarity as keyof typeof RARITY_COLORS] || RARITY_COLORS.Common,
+                   boxShadow: `0 0 30px ${RARITY_COLORS[spider.rarity as keyof typeof RARITY_COLORS] || RARITY_COLORS.Common}`
+                 }}>
+              <h4 className="text-lg font-semibold mb-4 text-center relative text-white">
+                Combat Stats
+              </h4>
+              <StatsDiamond 
+                stats={spider.stats} 
+                power={spider.power} 
+                rarity={spider.rarity}
+              />
+            </div>
+          </div>
+        </Dialog.Panel>
+      </div>
+    </Dialog>
+  );
+}
